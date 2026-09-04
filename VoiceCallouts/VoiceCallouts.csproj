@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
-    <Version>0.1.0.0</Version>
+    <Version>0.3.0.0</Version>
     <!-- Manifest fields (see https://github.com/goatcorp/DalamudPackager/blob/827d88dc/DalamudPackager/DalamudPackager.cs#L420) -->
     <Author>Mobijuan</Author>
     <Name>Voice Callouts</Name>
@@ -18,5 +18,11 @@ often the same ability can repeat.</Description>
     <!-- Windows SAPI text-to-speech. Windows-only, which matches this project's
          net10.0-windows7.0 target framework. -->
     <PackageReference Include="System.Speech" Version="9.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Bundled cactbot-derived ability warnings, see Services/CactbotWarnings.cs and
+         tools/cactbot-sync/sync.py (which regenerates this file from cactbot's latest data). -->
+    <EmbeddedResource Include="Data\cactbot-warnings.json" />
   </ItemGroup>
 </Project>

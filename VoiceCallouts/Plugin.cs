@@ -12,7 +12,7 @@ using VoiceCallouts.Windows;
 namespace VoiceCallouts;
 
 /// <summary>A single entry in the recent-callouts log shown in the main window.</summary>
-public readonly record struct CalloutRecord(DateTime Time, string BossName, string Ability);
+public readonly record struct CalloutRecord(DateTime Time, string BossName, string Ability, string Warning);
 
 public sealed class Plugin : IDalamudPlugin
 {
@@ -37,6 +37,8 @@ public sealed class Plugin : IDalamudPlugin
     internal BossDetector BossDetector { get; }
     internal CastWatcher CastWatcher { get; }
     internal TtsService TtsService { get; }
+    internal CactbotWarnings CactbotWarnings { get; }
+    internal AbilityWarningResolver WarningResolver { get; }
 
     /// <summary>Most-recent-first rolling log of callouts, for display in the main window.</summary>
     internal readonly List<CalloutRecord> RecentCallouts = [];
@@ -48,6 +50,8 @@ public sealed class Plugin : IDalamudPlugin
         BossDetector = new BossDetector(ClientState, Condition, ObjectTable, Configuration);
         CastWatcher = new CastWatcher(BossDetector, DataManager, Log, Configuration);
         TtsService = new TtsService(Log, Configuration);
+        CactbotWarnings = new CactbotWarnings(Log);
+        WarningResolver = new AbilityWarningResolver(DataManager, CactbotWarnings, Configuration);
 
         CastWatcher.AbilityAnnounced += OnAbilityAnnounced;
 
@@ -98,19 +102,29 @@ public sealed class Plugin : IDalamudPlugin
 
     private void OnFrameworkUpdate(IFramework framework) => CastWatcher.Tick();
 
-    private void OnAbilityAnnounced(string abilityName, IBattleNpc npc)
+    private void OnAbilityAnnounced(string abilityName, uint actionId, IBattleNpc npc)
     {
         var bossName = npc.Name.TextValue;
-
-        var text = Configuration.AnnouncementFormat
-            .Replace("{ability}", abilityName)
-            .Replace("{name}", bossName);
+        var warning = WarningResolver.Resolve(abilityName, actionId);
+        var text = FormatAnnouncement(Configuration.AnnouncementFormat, abilityName, bossName, warning);
 
         TtsService.Speak(text);
 
-        RecentCallouts.Insert(0, new CalloutRecord(DateTime.Now, bossName, abilityName));
+        RecentCallouts.Insert(0, new CalloutRecord(DateTime.Now, bossName, abilityName, warning));
         if (RecentCallouts.Count > MaxRecentCallouts)
             RecentCallouts.RemoveRange(MaxRecentCallouts, RecentCallouts.Count - MaxRecentCallouts);
+    }
+
+    private static string FormatAnnouncement(string template, string abilityName, string bossName, string warning)
+    {
+        var text = template
+            .Replace("{ability}", abilityName)
+            .Replace("{name}", bossName)
+            .Replace("{warning}", warning);
+
+        // {warning} is blank whenever the ability has no AbilityWarnings entry, so collapse the
+        // extra whitespace that leaves behind rather than speaking a dangling gap.
+        return string.Join(' ', text.Split(' ', StringSplitOptions.RemoveEmptyEntries));
     }
 
     private void OnCommand(string command, string args) => MainWindow.Toggle();

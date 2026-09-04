@@ -1,5 +1,6 @@
 ﻿using Dalamud.Configuration;
 using System;
+using System.Collections.Generic;
 
 namespace VoiceCallouts;
 
@@ -33,8 +34,32 @@ public class Configuration : IPluginConfiguration
 
     // --- Announcement text ---
 
-    /// <summary>Template for the spoken text. Supports {ability} and {name} placeholders.</summary>
-    public string AnnouncementFormat { get; set; } = "{ability}";
+    /// <summary>
+    /// Template for the spoken text. Supports {ability} and {name} placeholders, plus {warning}
+    /// (mechanic text from whichever source in <see cref="Services.AbilityWarningResolver"/>
+    /// matched first, blank if none did).
+    /// </summary>
+    public string AnnouncementFormat { get; set; } = "{ability} {warning}";
+
+    /// <summary>Master toggle for the {warning} feature as a whole - see <see cref="Services.AbilityWarningResolver"/>.</summary>
+    public bool WarningsEnabled { get; set; } = true;
+
+    /// <summary>Use your own <see cref="AbilityWarnings"/> entries. Always takes priority over the other sources.</summary>
+    public bool UseManualWarnings { get; set; } = true;
+
+    /// <summary>Use the bundled, offline-extracted snapshot of cactbot's fight data (<see cref="Services.CactbotWarnings"/>).</summary>
+    public bool UseCactbotWarnings { get; set; } = true;
+
+    /// <summary>Use the live guess from the game's own Action sheet data (<see cref="Services.AbilityShapeClassifier"/>). Thin coverage, checked last.</summary>
+    public bool UseLuminaShapeWarnings { get; set; } = true;
+
+    /// <summary>
+    /// Your own mechanic notes, keyed by ability name (matched case-insensitively) - e.g.
+    /// "Sidewise Spark" -> "FRONTAL", "Bad Breath" -> "GET OUT". Fill these in for anything the
+    /// automatic sources above miss or get wrong for the specific fight you're in - this always
+    /// overrides them. Spoken via the {warning} placeholder in <see cref="AnnouncementFormat"/>.
+    /// </summary>
+    public Dictionary<string, string> AbilityWarnings { get; set; } = new();
 
     // --- Text-to-speech ---
 
@@ -51,9 +76,9 @@ public class Configuration : IPluginConfiguration
 
     /// <summary>
     /// When true, every announced cast also dumps the full set of fields the game's Action
-    /// data sheet has for that ability to the plugin log (visible via /xllog). This is meant
-    /// for figuring out which raw field (if any) encodes AoE shape (cone/circle/donut/etc.) -
-    /// fight something with a known mechanic, check the log, and see what lines up.
+    /// data sheet has for that ability to the plugin log (visible via /xllog). Useful for
+    /// confirming an ability's exact name (for a new <see cref="AbilityWarnings"/> entry) or
+    /// otherwise poking at its raw game data.
     /// </summary>
     public bool LogActionDiagnostics { get; set; } = false;
 

@@ -25,7 +25,7 @@ public class CastWatcher(BossDetector bossDetector, IDataManager dataManager, IP
     // ability shortly after doesn't spam TTS.
     private readonly Dictionary<(ulong ObjectId, uint ActionId), DateTime> lastAnnouncedAt = new();
 
-    public event Action<string, IBattleNpc>? AbilityAnnounced;
+    public event Action<string, uint, IBattleNpc>? AbilityAnnounced;
 
     /// <summary>Call once per framework update.</summary>
     public void Tick()
@@ -72,7 +72,7 @@ public class CastWatcher(BossDetector bossDetector, IDataManager dataManager, IP
             lastAnnouncedAt[key] = DateTime.UtcNow;
 
             LogActionDiagnostics(npc.CastActionId, abilityName);
-            AbilityAnnounced?.Invoke(abilityName, npc);
+            AbilityAnnounced?.Invoke(abilityName, npc.CastActionId, npc);
         }
 
         // Forget bookkeeping for NPCs that are no longer considered active bosses, so
@@ -101,11 +101,11 @@ public class CastWatcher(BossDetector bossDetector, IDataManager dataManager, IP
     }
 
     /// <summary>
-    /// Diagnostic aid for finding AoE-shape data: dumps every field the Action sheet row has
-    /// for this ability to the plugin log, via reflection so it works regardless of exactly
-    /// which properties your installed Lumina schema exposes. Enable via
-    /// Configuration.LogActionDiagnostics, fight something with a known mechanic (e.g. "that
-    /// was a frontal cone"), then check /xllog for a field whose value seems to correlate.
+    /// Diagnostic aid: dumps every field the Action sheet row has for this ability to the
+    /// plugin log, via reflection so it works regardless of exactly which properties your
+    /// installed Lumina schema exposes. Enable via Configuration.LogActionDiagnostics to confirm
+    /// an ability's exact name/id (e.g. when building an entry for Configuration.AbilityWarnings)
+    /// or to poke at its raw game data for other reasons.
     /// </summary>
     private void LogActionDiagnostics(uint actionId, string abilityName)
     {
