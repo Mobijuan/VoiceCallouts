@@ -22,10 +22,7 @@ public class Configuration : IPluginConfiguration
 
     // --- Which abilities ---
 
-    /// <summary>If true, only abilities with a visible cast bar (a nonzero cast time) are announced.</summary>
-    public bool OnlyAnnounceCastsWithCastTime { get; set; } = true;
-
-    /// <summary>Casts shorter than this are skipped, even when they have a cast time.</summary>
+    /// <summary>Casts shorter than this are skipped (instant casts have a cast time of 0).</summary>
     public float MinimumCastTimeSeconds { get; set; } = 0f;
 
     /// <summary>How long to wait before the same enemy's same ability can be announced again.</summary>
@@ -34,14 +31,20 @@ public class Configuration : IPluginConfiguration
 
     // --- Announcement text ---
 
-    /// <summary>
-    /// Template for the spoken text. Supports {ability} and {name} placeholders, plus {warning}
-    /// (mechanic text from whichever source in <see cref="Services.AbilityWarningResolver"/>
-    /// matched first, blank if none did).
-    /// </summary>
-    public string AnnouncementFormat { get; set; } = "{ability} {warning}";
+    /// <summary>Include the boss's name in the spoken announcement (e.g. "Ifrit").</summary>
+    public bool AnnounceBossName { get; set; } = false;
 
-    /// <summary>Master toggle for the {warning} feature as a whole - see <see cref="Services.AbilityWarningResolver"/>.</summary>
+    /// <summary>Include the ability's name in the spoken announcement (e.g. "Sidewise Spark").</summary>
+    public bool AnnounceAbilityName { get; set; } = true;
+
+    /// <summary>
+    /// Include mechanic text in the spoken announcement, from whichever source in
+    /// <see cref="Services.AbilityWarningResolver"/> matched first. Has no effect when there's
+    /// nothing to say for that ability.
+    /// </summary>
+    public bool AnnounceWarning { get; set; } = true;
+
+    /// <summary>Master toggle for the warning feature as a whole - see <see cref="Services.AbilityWarningResolver"/>.</summary>
     public bool WarningsEnabled { get; set; } = true;
 
     /// <summary>Use your own <see cref="AbilityWarnings"/> entries. Always takes priority over the other sources.</summary>
@@ -57,7 +60,7 @@ public class Configuration : IPluginConfiguration
     /// Your own mechanic notes, keyed by ability name (matched case-insensitively) - e.g.
     /// "Sidewise Spark" -> "FRONTAL", "Bad Breath" -> "GET OUT". Fill these in for anything the
     /// automatic sources above miss or get wrong for the specific fight you're in - this always
-    /// overrides them. Spoken via the {warning} placeholder in <see cref="AnnouncementFormat"/>.
+    /// overrides them. Only spoken when <see cref="AnnounceWarning"/> is on.
     /// </summary>
     public Dictionary<string, string> AbilityWarnings { get; set; } = new();
 
@@ -81,10 +84,6 @@ public class Configuration : IPluginConfiguration
     /// otherwise poking at its raw game data.
     /// </summary>
     public bool LogActionDiagnostics { get; set; } = false;
-
-    // --- Window state ---
-
-    public bool IsConfigWindowMovable { get; set; } = true;
 
     public void Save()
     {

@@ -87,18 +87,7 @@ public class CastWatcher(BossDetector bossDetector, IDataManager dataManager, IP
         }
     }
 
-    private bool PassesFilters(IBattleNpc npc)
-    {
-        var hasCastTime = npc.TotalCastTime > 0f;
-
-        if (configuration.OnlyAnnounceCastsWithCastTime && !hasCastTime)
-            return false;
-
-        if (npc.TotalCastTime < configuration.MinimumCastTimeSeconds)
-            return false;
-
-        return true;
-    }
+    private bool PassesFilters(IBattleNpc npc) => npc.TotalCastTime >= configuration.MinimumCastTimeSeconds;
 
     /// <summary>
     /// Diagnostic aid: dumps every field the Action sheet row has for this ability to the

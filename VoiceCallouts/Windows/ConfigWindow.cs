@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Game.Config;
 using Dalamud.Interface.Windowing;
 
 namespace VoiceCallouts.Windows;
@@ -26,15 +27,6 @@ public class ConfigWindow : Window, IDisposable
 
     public void Dispose() { }
 
-    public override void PreDraw()
-    {
-        // Flags must be added or removed before Draw() is being called, or they won't apply
-        if (configuration.IsConfigWindowMovable)
-            Flags &= ~ImGuiWindowFlags.NoMove;
-        else
-            Flags |= ImGuiWindowFlags.NoMove;
-    }
-
     public override void Draw()
     {
         var enabled = configuration.Enabled;
@@ -43,116 +35,6 @@ public class ConfigWindow : Window, IDisposable
             configuration.Enabled = enabled;
             configuration.Save();
         }
-
-        var movable = configuration.IsConfigWindowMovable;
-        if (ImGui.Checkbox("Movable settings window", ref movable))
-        {
-            configuration.IsConfigWindowMovable = movable;
-            configuration.Save();
-        }
-
-        ImGui.Spacing();
-        ImGui.Separator();
-        ImGui.TextUnformatted("Where to listen");
-        ImGui.Spacing();
-
-        var inDuties = configuration.AnnounceInDuties;
-        if (ImGui.Checkbox("Instanced duties (dungeons, trials, raids)", ref inDuties))
-        {
-            configuration.AnnounceInDuties = inDuties;
-            configuration.Save();
-        }
-
-        var openWorld = configuration.AnnounceInOpenWorld;
-        if (ImGui.Checkbox("Open world (FATEs, field bosses, etc.)", ref openWorld))
-        {
-            configuration.AnnounceInOpenWorld = openWorld;
-            configuration.Save();
-        }
-
-        ImGui.Spacing();
-        ImGui.Separator();
-        ImGui.TextUnformatted("Which abilities");
-        ImGui.Spacing();
-
-        var onlyCastTime = configuration.OnlyAnnounceCastsWithCastTime;
-        if (ImGui.Checkbox("Only announce abilities with a cast bar", ref onlyCastTime))
-        {
-            configuration.OnlyAnnounceCastsWithCastTime = onlyCastTime;
-            configuration.Save();
-        }
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("When off, instant-cast abilities are announced too.");
-
-        var minCastTime = configuration.MinimumCastTimeSeconds;
-        if (ImGui.SliderFloat("Minimum cast time (seconds)", ref minCastTime, 0f, 10f, "%.1f"))
-        {
-            configuration.MinimumCastTimeSeconds = minCastTime;
-            configuration.Save();
-        }
-
-        var repeatSuppression = configuration.RepeatSuppressionSeconds;
-        if (ImGui.SliderFloat("Repeat suppression (seconds)", ref repeatSuppression, 0f, 15f, "%.1f"))
-        {
-            configuration.RepeatSuppressionSeconds = repeatSuppression;
-            configuration.Save();
-        }
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("How long to wait before the same enemy's same ability can be announced again.");
-
-        ImGui.Spacing();
-        ImGui.Separator();
-        ImGui.TextUnformatted("Announcement");
-        ImGui.Spacing();
-
-        var format = configuration.AnnouncementFormat;
-        if (ImGui.InputText("Format", ref format, 128))
-        {
-            configuration.AnnouncementFormat = format;
-            configuration.Save();
-        }
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Available placeholders: {ability}, {name}, {warning} (mechanic text - see the Warnings section on the main window for sources, and the manual list below)");
-
-        ImGui.Spacing();
-        ImGui.TextUnformatted("Manual ability warnings");
-        ImGui.TextWrapped("These always override the Cactbot/Game data sources (toggled on the main window) for the abilities listed here. Use this for anything those get wrong or miss for the fight you're in. Match is by the ability's exact spoken name (case-insensitive).");
-        ImGui.Spacing();
-
-        string? toRemove = null;
-        foreach (var (name, warning) in configuration.AbilityWarnings)
-        {
-            ImGui.TextUnformatted($"{name}: {warning}");
-            ImGui.SameLine();
-            if (ImGui.SmallButton($"Remove##{name}"))
-                toRemove = name;
-        }
-
-        if (toRemove != null)
-        {
-            configuration.AbilityWarnings.Remove(toRemove);
-            configuration.Save();
-        }
-
-        ImGui.Spacing();
-        ImGui.SetNextItemWidth(160);
-        ImGui.InputText("##NewWarningAbility", ref newWarningAbility, 128);
-        ImGui.SameLine();
-        ImGui.SetNextItemWidth(120);
-        ImGui.InputText("##NewWarningText", ref newWarningText, 64);
-        ImGui.SameLine();
-        var canAdd = !string.IsNullOrWhiteSpace(newWarningAbility) && !string.IsNullOrWhiteSpace(newWarningText);
-        ImGui.BeginDisabled(!canAdd);
-        if (ImGui.Button("Add"))
-        {
-            configuration.AbilityWarnings[newWarningAbility.Trim()] = newWarningText.Trim();
-            configuration.Save();
-            newWarningAbility = "";
-            newWarningText = "";
-        }
-        ImGui.EndDisabled();
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Ability name, then the text to speak/show after it");
 
         ImGui.Spacing();
         ImGui.Separator();
@@ -200,6 +82,128 @@ public class ConfigWindow : Window, IDisposable
         ImGui.Spacing();
         if (ImGui.Button("Test Voice"))
             plugin.TtsService.Speak("Voice callouts test.");
+
+        ImGui.Spacing();
+        ImGui.TextUnformatted("Game volume");
+        ImGui.Spacing();
+        ImGui.TextWrapped("This is the game's own Master Volume slider (also in the game's System > Sound settings) - surfaced here so you can balance it against the voice above without leaving this window.");
+
+        if (Plugin.GameConfig.TryGet(SystemConfigOption.SoundMaster, out uint masterVolume) &&
+            Plugin.GameConfig.TryGet(SystemConfigOption.SoundMaster, out UIntConfigProperties? masterVolumeProps) &&
+            masterVolumeProps != null)
+        {
+            var masterVolumeInt = (int)masterVolume;
+            if (ImGui.SliderInt("Master volume", ref masterVolumeInt, (int)masterVolumeProps.Minimum, (int)masterVolumeProps.Maximum))
+                Plugin.GameConfig.Set(SystemConfigOption.SoundMaster, (uint)masterVolumeInt);
+        }
+
+        ImGui.Spacing();
+        ImGui.Separator();
+        ImGui.TextUnformatted("Where to listen");
+        ImGui.Spacing();
+
+        var inDuties = configuration.AnnounceInDuties;
+        if (ImGui.Checkbox("Instanced duties (dungeons, trials, raids)", ref inDuties))
+        {
+            configuration.AnnounceInDuties = inDuties;
+            configuration.Save();
+        }
+
+        var openWorld = configuration.AnnounceInOpenWorld;
+        if (ImGui.Checkbox("Open world (FATEs, field bosses, etc.)", ref openWorld))
+        {
+            configuration.AnnounceInOpenWorld = openWorld;
+            configuration.Save();
+        }
+
+        ImGui.Spacing();
+        ImGui.Separator();
+        ImGui.TextUnformatted("Which abilities");
+        ImGui.Spacing();
+
+        var minCastTime = configuration.MinimumCastTimeSeconds;
+        if (ImGui.SliderFloat("Minimum cast time (seconds)", ref minCastTime, 0f, 10f, "%.1f"))
+        {
+            configuration.MinimumCastTimeSeconds = minCastTime;
+            configuration.Save();
+        }
+
+        var repeatSuppression = configuration.RepeatSuppressionSeconds;
+        if (ImGui.SliderFloat("Repeat suppression (seconds)", ref repeatSuppression, 0f, 15f, "%.1f"))
+        {
+            configuration.RepeatSuppressionSeconds = repeatSuppression;
+            configuration.Save();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("How long to wait before the same enemy's same ability can be announced again.");
+
+        ImGui.Spacing();
+        ImGui.Separator();
+        ImGui.TextUnformatted("Announcement");
+        ImGui.Spacing();
+
+        var announceBossName = configuration.AnnounceBossName;
+        if (ImGui.Checkbox("Boss name", ref announceBossName))
+        {
+            configuration.AnnounceBossName = announceBossName;
+            configuration.Save();
+        }
+
+        var announceAbilityName = configuration.AnnounceAbilityName;
+        if (ImGui.Checkbox("Ability name", ref announceAbilityName))
+        {
+            configuration.AnnounceAbilityName = announceAbilityName;
+            configuration.Save();
+        }
+
+        var announceWarning = configuration.AnnounceWarning;
+        if (ImGui.Checkbox("Warning", ref announceWarning))
+        {
+            configuration.AnnounceWarning = announceWarning;
+            configuration.Save();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Mechanic text - see the Warnings section on the main window for sources, and the manual list below. Only spoken when there's something to say.");
+
+        ImGui.Spacing();
+        ImGui.TextUnformatted("Manual ability warnings");
+        ImGui.TextWrapped("These always override the Cactbot/Game data sources (toggled on the main window) for the abilities listed here. Use this for anything those get wrong or miss for the fight you're in. Match is by the ability's exact spoken name (case-insensitive). Tip: click a recent callout on the main window to add one without typing the name.");
+        ImGui.Spacing();
+
+        string? toRemove = null;
+        foreach (var (name, warning) in configuration.AbilityWarnings)
+        {
+            ImGui.TextUnformatted($"{name}: {warning}");
+            ImGui.SameLine();
+            if (ImGui.SmallButton($"Remove##{name}"))
+                toRemove = name;
+        }
+
+        if (toRemove != null)
+        {
+            configuration.AbilityWarnings.Remove(toRemove);
+            configuration.Save();
+        }
+
+        ImGui.Spacing();
+        ImGui.SetNextItemWidth(160);
+        ImGui.InputText("##NewWarningAbility", ref newWarningAbility, 128);
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(120);
+        ImGui.InputText("##NewWarningText", ref newWarningText, 64);
+        ImGui.SameLine();
+        var canAdd = !string.IsNullOrWhiteSpace(newWarningAbility) && !string.IsNullOrWhiteSpace(newWarningText);
+        ImGui.BeginDisabled(!canAdd);
+        if (ImGui.Button("Add"))
+        {
+            configuration.AbilityWarnings[newWarningAbility.Trim()] = newWarningText.Trim();
+            configuration.Save();
+            newWarningAbility = "";
+            newWarningText = "";
+        }
+        ImGui.EndDisabled();
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Ability name, then the text to speak/show after it");
 
         ImGui.Spacing();
         ImGui.Separator();

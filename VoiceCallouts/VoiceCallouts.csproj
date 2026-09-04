@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
-    <Version>0.3.0.0</Version>
+    <Version>0.4.0.0</Version>
     <!-- Manifest fields (see https://github.com/goatcorp/DalamudPackager/blob/827d88dc/DalamudPackager/DalamudPackager.cs#L420) -->
     <Author>Mobijuan</Author>
     <Name>Voice Callouts</Name>
     <Punchline>Text-to-speech callouts for boss abilities in duties and open-world encounters.</Punchline>
     <Description>Listens for hostile boss casts while you're in a duty or an open-world boss
 encounter (FATEs, field bosses, etc.) and reads the ability name aloud via text-to-speech.
-Configurable to only call out abilities with a visible cast bar, a minimum cast time, and how
-often the same ability can repeat.</Description>
+Configurable minimum cast time and repeat suppression, plus mechanic warnings (e.g. "FRONTAL")
+from your own notes, a bundled cactbot-derived data set, and the game's own data.</Description>
     <RepoUrl>https://github.com/Mobijuan/VoiceCallouts</RepoUrl>
     <Tags>voice;tts;boss;callouts;combat;accessibility</Tags>
   </PropertyGroup>

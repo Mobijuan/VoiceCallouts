@@ -8,7 +8,11 @@ namespace VoiceCallouts.Windows;
 
 public class MainWindow : Window, IDisposable
 {
+    private const string AddWarningPopupId = "AddAbilityWarning";
+
     private readonly Plugin plugin;
+    private string editingAbility = "";
+    private string editingWarningText = "";
 
     public MainWindow(Plugin plugin)
         : base("Voice Callouts##VoiceCalloutsMainWindow")
@@ -53,7 +57,7 @@ public class MainWindow : Window, IDisposable
             plugin.Configuration.Save();
         }
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Master switch for the {warning} placeholder - see Settings > Announcement > Format.");
+            ImGui.SetTooltip("Master switch for the Warning announcement - see Settings > Announcement.");
 
         ImGui.BeginDisabled(!warningsEnabled);
 
@@ -103,23 +107,95 @@ public class MainWindow : Window, IDisposable
         ImGui.Spacing();
         ImGui.Separator();
         ImGui.TextUnformatted("Recent callouts");
+        ImGui.TextDisabled("Click one to add/edit a manual warning for that ability.");
         ImGui.Spacing();
 
-        using var child = ImRaii.Child("RecentCallouts", Vector2.Zero, true);
-        if (child.Success)
+        using (var child = ImRaii.Child("RecentCallouts", Vector2.Zero, true))
         {
-            if (plugin.RecentCallouts.Count == 0)
+            if (child.Success)
             {
-                ImGui.TextDisabled("No callouts yet.");
-            }
-            else
-            {
-                foreach (var record in plugin.RecentCallouts)
+                if (plugin.RecentCallouts.Count == 0)
                 {
-                    var warningSuffix = string.IsNullOrEmpty(record.Warning) ? "" : $" ({record.Warning})";
-                    ImGui.TextUnformatted($"[{record.Time:HH:mm:ss}] {record.BossName}: {record.Ability}{warningSuffix}");
+                    ImGui.TextDisabled("No callouts yet.");
                 }
+                else
+                {
+                    for (var i = 0; i < plugin.RecentCallouts.Count; i++)
+                    {
+                        var record = plugin.RecentCallouts[i];
+                        var warningSuffix = string.IsNullOrEmpty(record.Warning) ? "" : $" ({record.Warning})";
+                        if (ImGui.Selectable($"[{record.Time:HH:mm:ss}] {record.BossName}: {record.Ability}{warningSuffix}##callout{i}"))
+                        {
+                            editingAbility = record.Ability;
+                            editingWarningText = FindExistingWarning(record.Ability) ?? "";
+                            ImGui.OpenPopup(AddWarningPopupId);
+                        }
+                    }
+                }
+
+                // OpenPopup/BeginPopup resolve their id relative to the *current* window, so
+                // this has to run inside the same child region OpenPopup was called from above -
+                // calling it after the child closes (back in the parent window's id scope) means
+                // the two calls hash to different popup ids and the popup silently never opens.
+                DrawAddWarningPopup();
             }
         }
+    }
+
+    private void DrawAddWarningPopup()
+    {
+        if (!ImGui.BeginPopup(AddWarningPopupId))
+            return;
+
+        ImGui.TextUnformatted($"Warning for: {editingAbility}");
+        ImGui.Spacing();
+        ImGui.SetNextItemWidth(200);
+        ImGui.InputText("##EditWarningText", ref editingWarningText, 64);
+
+        var existingKey = FindExistingWarningKey(editingAbility);
+
+        if (ImGui.Button("Save"))
+        {
+            if (!string.IsNullOrWhiteSpace(editingWarningText))
+            {
+                plugin.Configuration.AbilityWarnings[existingKey ?? editingAbility] = editingWarningText.Trim();
+                plugin.Configuration.Save();
+            }
+            ImGui.CloseCurrentPopup();
+        }
+
+        if (existingKey != null)
+        {
+            ImGui.SameLine();
+            if (ImGui.Button("Remove"))
+            {
+                plugin.Configuration.AbilityWarnings.Remove(existingKey);
+                plugin.Configuration.Save();
+                ImGui.CloseCurrentPopup();
+            }
+        }
+
+        ImGui.SameLine();
+        if (ImGui.Button("Cancel"))
+            ImGui.CloseCurrentPopup();
+
+        ImGui.EndPopup();
+    }
+
+    private string? FindExistingWarningKey(string abilityName)
+    {
+        foreach (var key in plugin.Configuration.AbilityWarnings.Keys)
+        {
+            if (string.Equals(key, abilityName, StringComparison.OrdinalIgnoreCase))
+                return key;
+        }
+
+        return null;
+    }
+
+    private string? FindExistingWarning(string abilityName)
+    {
+        var key = FindExistingWarningKey(abilityName);
+        return key != null ? plugin.Configuration.AbilityWarnings[key] : null;
     }
 }

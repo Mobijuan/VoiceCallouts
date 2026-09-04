@@ -24,6 +24,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IDataManager DataManager { get; private set; } = null!;
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
+    [PluginService] internal static IGameConfig GameConfig { get; private set; } = null!;
 
     private const string CommandName = "/vcallouts";
     private const int MaxRecentCallouts = 50;
@@ -106,7 +107,7 @@ public sealed class Plugin : IDalamudPlugin
     {
         var bossName = npc.Name.TextValue;
         var warning = WarningResolver.Resolve(abilityName, actionId);
-        var text = FormatAnnouncement(Configuration.AnnouncementFormat, abilityName, bossName, warning);
+        var text = FormatAnnouncement(Configuration, abilityName, bossName, warning);
 
         TtsService.Speak(text);
 
@@ -115,16 +116,20 @@ public sealed class Plugin : IDalamudPlugin
             RecentCallouts.RemoveRange(MaxRecentCallouts, RecentCallouts.Count - MaxRecentCallouts);
     }
 
-    private static string FormatAnnouncement(string template, string abilityName, string bossName, string warning)
+    private static string FormatAnnouncement(Configuration configuration, string abilityName, string bossName, string warning)
     {
-        var text = template
-            .Replace("{ability}", abilityName)
-            .Replace("{name}", bossName)
-            .Replace("{warning}", warning);
+        var parts = new List<string>();
 
-        // {warning} is blank whenever the ability has no AbilityWarnings entry, so collapse the
-        // extra whitespace that leaves behind rather than speaking a dangling gap.
-        return string.Join(' ', text.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        if (configuration.AnnounceBossName)
+            parts.Add(bossName);
+
+        if (configuration.AnnounceAbilityName)
+            parts.Add(abilityName);
+
+        if (configuration.AnnounceWarning && !string.IsNullOrEmpty(warning))
+            parts.Add(warning);
+
+        return string.Join(' ', parts);
     }
 
     private void OnCommand(string command, string args) => MainWindow.Toggle();
