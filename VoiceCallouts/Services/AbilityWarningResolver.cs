@@ -1,4 +1,3 @@
-using System;
 using Dalamud.Plugin.Services;
 
 namespace VoiceCallouts.Services;
@@ -8,7 +7,9 @@ namespace VoiceCallouts.Services;
 /// these sources are enabled in <see cref="Configuration"/>:
 ///
 /// 1. Manual (<see cref="Configuration.AbilityWarnings"/>) - your own entries, matched by
-///    ability name. Always wins when present, since it's an explicit correction/preference.
+///    creature + ability name together (FFXIV reuses generic ability names like "Meteor" across
+///    unrelated bosses, so ability name alone isn't a safe key). Always wins when present, since
+///    it's an explicit correction/preference.
 /// 2. Cactbot (<see cref="CactbotWarnings"/>) - a bundled, offline-extracted snapshot of
 ///    cactbot's community-maintained fight data, matched by ability id.
 /// 3. Lumina (<see cref="AbilityShapeClassifier"/>) - a live, on-the-fly guess from the game's
@@ -19,18 +20,16 @@ namespace VoiceCallouts.Services;
 /// </summary>
 public sealed class AbilityWarningResolver(IDataManager dataManager, CactbotWarnings cactbotWarnings, Configuration configuration)
 {
-    public string Resolve(string abilityName, uint actionId)
+    public string Resolve(string abilityName, string creatureName, uint actionId)
     {
         if (!configuration.WarningsEnabled)
             return "";
 
         if (configuration.UseManualWarnings)
         {
-            foreach (var (name, warning) in configuration.AbilityWarnings)
-            {
-                if (string.Equals(name, abilityName, StringComparison.OrdinalIgnoreCase))
-                    return warning;
-            }
+            var manual = configuration.FindAbilityWarning(creatureName, abilityName);
+            if (manual != null)
+                return manual.Warning;
         }
 
         if (configuration.UseCactbotWarnings && cactbotWarnings.TryGet(actionId, out var cactbotEntry))

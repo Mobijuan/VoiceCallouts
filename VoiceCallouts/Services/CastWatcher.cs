@@ -21,9 +21,9 @@ public class CastWatcher(BossDetector bossDetector, IDataManager dataManager, IP
     // re-announced every tick for as long as it's being cast.
     private readonly Dictionary<ulong, uint> lastAnnouncedActionByObject = new();
 
-    // When each (object, action) pair was last announced, so the same enemy re-using the same
-    // ability shortly after doesn't spam TTS.
-    private readonly Dictionary<(ulong ObjectId, uint ActionId), DateTime> lastAnnouncedAt = new();
+    // When each action id was last announced, by ANY enemy - so a pull with several identical
+    // adds casting the same ability around the same time gets announced once, not once per add.
+    private readonly Dictionary<uint, DateTime> lastAnnouncedAt = new();
 
     public event Action<string, uint, IBattleNpc>? AbilityAnnounced;
 
@@ -55,8 +55,7 @@ public class CastWatcher(BossDetector bossDetector, IDataManager dataManager, IP
             if (!PassesFilters(npc))
                 continue;
 
-            var key = (npc.GameObjectId, npc.CastActionId);
-            if (lastAnnouncedAt.TryGetValue(key, out var lastTime) &&
+            if (lastAnnouncedAt.TryGetValue(npc.CastActionId, out var lastTime) &&
                 (DateTime.UtcNow - lastTime).TotalSeconds < configuration.RepeatSuppressionSeconds)
             {
                 // Too soon to repeat - remember we "saw" it so we don't keep re-checking every tick.
@@ -69,7 +68,7 @@ public class CastWatcher(BossDetector bossDetector, IDataManager dataManager, IP
                 continue;
 
             lastAnnouncedActionByObject[npc.GameObjectId] = npc.CastActionId;
-            lastAnnouncedAt[key] = DateTime.UtcNow;
+            lastAnnouncedAt[npc.CastActionId] = DateTime.UtcNow;
 
             LogActionDiagnostics(npc.CastActionId, abilityName);
             AbilityAnnounced?.Invoke(abilityName, npc.CastActionId, npc);

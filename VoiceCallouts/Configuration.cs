@@ -1,6 +1,7 @@
 ﻿using Dalamud.Configuration;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace VoiceCallouts;
 
@@ -25,7 +26,11 @@ public class Configuration : IPluginConfiguration
     /// <summary>Casts shorter than this are skipped (instant casts have a cast time of 0).</summary>
     public float MinimumCastTimeSeconds { get; set; } = 0f;
 
-    /// <summary>How long to wait before the same enemy's same ability can be announced again.</summary>
+    /// <summary>
+    /// How long to wait before the same ability can be announced again, regardless of which
+    /// enemy casts it - so a pull with several identical adds casting the same ability around
+    /// the same time is announced once, not once per add.
+    /// </summary>
     public float RepeatSuppressionSeconds { get; set; } = 2.5f;
 
 
@@ -57,12 +62,46 @@ public class Configuration : IPluginConfiguration
     public bool UseLuminaShapeWarnings { get; set; } = true;
 
     /// <summary>
-    /// Your own mechanic notes, keyed by ability name (matched case-insensitively) - e.g.
-    /// "Sidewise Spark" -> "FRONTAL", "Bad Breath" -> "GET OUT". Fill these in for anything the
-    /// automatic sources above miss or get wrong for the specific fight you're in - this always
-    /// overrides them. Only spoken when <see cref="AnnounceWarning"/> is on.
+    /// Your own mechanic notes. Fill these in for anything the automatic sources above miss or
+    /// get wrong for the specific fight you're in - this always overrides them. Only spoken when
+    /// <see cref="AnnounceWarning"/> is on. Manage these from the Ability Warnings window (button
+    /// in Settings), or by clicking a recent callout on the main window.
     /// </summary>
-    public Dictionary<string, string> AbilityWarnings { get; set; } = new();
+    public List<AbilityWarningEntry> AbilityWarnings { get; set; } = new();
+
+    /// <summary>Next id to hand out in <see cref="AddOrUpdateAbilityWarning"/> - never reused, even after deletions.</summary>
+    public int NextAbilityWarningId { get; set; } = 1;
+
+    /// <summary>Finds a manual warning entry by creature + ability name (both case-insensitive).</summary>
+    public AbilityWarningEntry? FindAbilityWarning(string creatureName, string abilityName) =>
+        AbilityWarnings.FirstOrDefault(e =>
+            string.Equals(e.CreatureName, creatureName, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(e.AbilityName, abilityName, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Updates the warning text of the matching (creature, ability) entry if one exists, or adds
+    /// a new one with the next auto-incremented id. Does not save - call <see cref="Save"/>.
+    /// </summary>
+    public AbilityWarningEntry AddOrUpdateAbilityWarning(string zone, string creatureName, string abilityName, string warning)
+    {
+        var existing = FindAbilityWarning(creatureName, abilityName);
+        if (existing != null)
+        {
+            existing.Warning = warning;
+            return existing;
+        }
+
+        var entry = new AbilityWarningEntry
+        {
+            Id = NextAbilityWarningId++,
+            Zone = zone,
+            CreatureName = creatureName,
+            AbilityName = abilityName,
+            Warning = warning,
+        };
+        AbilityWarnings.Add(entry);
+        return entry;
+    }
 
     // --- Text-to-speech ---
 

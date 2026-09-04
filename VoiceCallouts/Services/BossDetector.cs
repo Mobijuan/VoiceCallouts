@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Objects.Enums;
@@ -21,8 +22,36 @@ namespace VoiceCallouts.Services;
 /// Dalamud properties against your installed SDK version (the same way BattleNpcSubKind and
 /// this file's original icon lookup needed verifying).
 /// </summary>
-public class BossDetector(IClientState clientState, ICondition condition, IObjectTable objectTable, Configuration configuration)
+public class BossDetector(IClientState clientState, ICondition condition, IObjectTable objectTable, IDataManager dataManager, IPluginLog log, Configuration configuration)
 {
+    /// <summary>
+    /// The current duty's or open-world zone's display name (e.g. "Alexandria", "Ultima Thule"),
+    /// via the TerritoryType -> PlaceName lookup. Falls back to "Duty"/"Open World" if the
+    /// current territory id doesn't resolve to a place name for some reason.
+    /// </summary>
+    public string CurrentZoneName
+    {
+        get
+        {
+            try
+            {
+                var sheet = dataManager.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>();
+                if (sheet != null && sheet.TryGetRow(clientState.TerritoryType, out var row) && row.PlaceName.IsValid)
+                {
+                    var name = row.PlaceName.Value.Name.ToString();
+                    if (!string.IsNullOrWhiteSpace(name))
+                        return name;
+                }
+            }
+            catch (Exception ex)
+            {
+                log.Warning(ex, "Failed to resolve current zone name for territory id {TerritoryType}", clientState.TerritoryType);
+            }
+
+            return IsInDuty ? "Duty" : "Open World";
+        }
+    }
+
     /// <summary>True while bound to an instanced duty (dungeon, trial, raid, alliance raid, etc.).</summary>
     public bool IsInDuty =>
         condition[ConditionFlag.BoundByDuty] ||

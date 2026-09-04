@@ -12,7 +12,7 @@ using VoiceCallouts.Windows;
 namespace VoiceCallouts;
 
 /// <summary>A single entry in the recent-callouts log shown in the main window.</summary>
-public readonly record struct CalloutRecord(DateTime Time, string BossName, string Ability, string Warning);
+public readonly record struct CalloutRecord(DateTime Time, string BossName, string Ability, string Warning, string Zone);
 
 public sealed class Plugin : IDalamudPlugin
 {
@@ -34,6 +34,7 @@ public sealed class Plugin : IDalamudPlugin
     public readonly WindowSystem WindowSystem = new("VoiceCallouts");
     private ConfigWindow ConfigWindow { get; init; }
     private MainWindow MainWindow { get; init; }
+    private AbilityWarningsWindow AbilityWarningsWindow { get; init; }
 
     internal BossDetector BossDetector { get; }
     internal CastWatcher CastWatcher { get; }
@@ -46,9 +47,9 @@ public sealed class Plugin : IDalamudPlugin
 
     public Plugin()
     {
-        Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
+        Configuration = LoadConfiguration();
 
-        BossDetector = new BossDetector(ClientState, Condition, ObjectTable, Configuration);
+        BossDetector = new BossDetector(ClientState, Condition, ObjectTable, DataManager, Log, Configuration);
         CastWatcher = new CastWatcher(BossDetector, DataManager, Log, Configuration);
         TtsService = new TtsService(Log, Configuration);
         CactbotWarnings = new CactbotWarnings(Log);
@@ -58,9 +59,11 @@ public sealed class Plugin : IDalamudPlugin
 
         ConfigWindow = new ConfigWindow(this);
         MainWindow = new MainWindow(this);
+        AbilityWarningsWindow = new AbilityWarningsWindow(this);
 
         WindowSystem.AddWindow(ConfigWindow);
         WindowSystem.AddWindow(MainWindow);
+        WindowSystem.AddWindow(AbilityWarningsWindow);
 
         CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
@@ -82,6 +85,27 @@ public sealed class Plugin : IDalamudPlugin
         Log.Information("VoiceCallouts loaded.");
     }
 
+    /// <summary>
+    /// A saved config from an older version of the plugin can have a shape the current
+    /// Configuration class can no longer deserialize (this has already happened once, when
+    /// AbilityWarnings changed from a dictionary to a list) - GetPluginConfig() throws in that
+    /// case rather than returning null, which would otherwise crash the whole plugin on load.
+    /// Falling back to defaults here means a schema change costs you your old settings, not the
+    /// ability to open the plugin at all.
+    /// </summary>
+    private static Configuration LoadConfiguration()
+    {
+        try
+        {
+            return PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Saved configuration couldn't be loaded (likely from an older, incompatible version) - starting with defaults.");
+            return new Configuration();
+        }
+    }
+
     public void Dispose()
     {
         Framework.Update -= OnFrameworkUpdate;
@@ -94,6 +118,7 @@ public sealed class Plugin : IDalamudPlugin
 
         ConfigWindow.Dispose();
         MainWindow.Dispose();
+        AbilityWarningsWindow.Dispose();
         TtsService.Dispose();
 
         CastWatcher.AbilityAnnounced -= OnAbilityAnnounced;
@@ -106,12 +131,13 @@ public sealed class Plugin : IDalamudPlugin
     private void OnAbilityAnnounced(string abilityName, uint actionId, IBattleNpc npc)
     {
         var bossName = npc.Name.TextValue;
-        var warning = WarningResolver.Resolve(abilityName, actionId);
+        var zone = BossDetector.CurrentZoneName;
+        var warning = WarningResolver.Resolve(abilityName, bossName, actionId);
         var text = FormatAnnouncement(Configuration, abilityName, bossName, warning);
 
         TtsService.Speak(text);
 
-        RecentCallouts.Insert(0, new CalloutRecord(DateTime.Now, bossName, abilityName, warning));
+        RecentCallouts.Insert(0, new CalloutRecord(DateTime.Now, bossName, abilityName, warning, zone));
         if (RecentCallouts.Count > MaxRecentCallouts)
             RecentCallouts.RemoveRange(MaxRecentCallouts, RecentCallouts.Count - MaxRecentCallouts);
     }
@@ -136,4 +162,5 @@ public sealed class Plugin : IDalamudPlugin
 
     public void ToggleConfigUi() => ConfigWindow.Toggle();
     public void ToggleMainUi() => MainWindow.Toggle();
+    public void ToggleAbilityWarningsUi() => AbilityWarningsWindow.Toggle();
 }

@@ -11,6 +11,8 @@ public class MainWindow : Window, IDisposable
     private const string AddWarningPopupId = "AddAbilityWarning";
 
     private readonly Plugin plugin;
+    private string editingZone = "";
+    private string editingCreature = "";
     private string editingAbility = "";
     private string editingWarningText = "";
 
@@ -44,6 +46,10 @@ public class MainWindow : Window, IDisposable
         ImGui.SameLine();
         if (ImGui.Button("Test Voice"))
             plugin.TtsService.Speak("Voice callouts test.");
+
+        ImGui.SameLine();
+        if (ImGui.Button("Manage Warnings"))
+            plugin.ToggleAbilityWarningsUi();
 
         ImGui.Spacing();
         ImGui.Separator();
@@ -126,8 +132,10 @@ public class MainWindow : Window, IDisposable
                         var warningSuffix = string.IsNullOrEmpty(record.Warning) ? "" : $" ({record.Warning})";
                         if (ImGui.Selectable($"[{record.Time:HH:mm:ss}] {record.BossName}: {record.Ability}{warningSuffix}##callout{i}"))
                         {
+                            editingZone = record.Zone;
+                            editingCreature = record.BossName;
                             editingAbility = record.Ability;
-                            editingWarningText = FindExistingWarning(record.Ability) ?? "";
+                            editingWarningText = plugin.Configuration.FindAbilityWarning(record.BossName, record.Ability)?.Warning ?? "";
                             ImGui.OpenPopup(AddWarningPopupId);
                         }
                     }
@@ -147,29 +155,29 @@ public class MainWindow : Window, IDisposable
         if (!ImGui.BeginPopup(AddWarningPopupId))
             return;
 
-        ImGui.TextUnformatted($"Warning for: {editingAbility}");
+        ImGui.TextUnformatted($"Warning for: {editingCreature}: {editingAbility} ({editingZone})");
         ImGui.Spacing();
         ImGui.SetNextItemWidth(200);
         ImGui.InputText("##EditWarningText", ref editingWarningText, 64);
 
-        var existingKey = FindExistingWarningKey(editingAbility);
+        var existing = plugin.Configuration.FindAbilityWarning(editingCreature, editingAbility);
 
         if (ImGui.Button("Save"))
         {
             if (!string.IsNullOrWhiteSpace(editingWarningText))
             {
-                plugin.Configuration.AbilityWarnings[existingKey ?? editingAbility] = editingWarningText.Trim();
+                plugin.Configuration.AddOrUpdateAbilityWarning(editingZone, editingCreature, editingAbility, editingWarningText.Trim());
                 plugin.Configuration.Save();
             }
             ImGui.CloseCurrentPopup();
         }
 
-        if (existingKey != null)
+        if (existing != null)
         {
             ImGui.SameLine();
             if (ImGui.Button("Remove"))
             {
-                plugin.Configuration.AbilityWarnings.Remove(existingKey);
+                plugin.Configuration.AbilityWarnings.Remove(existing);
                 plugin.Configuration.Save();
                 ImGui.CloseCurrentPopup();
             }
@@ -180,22 +188,5 @@ public class MainWindow : Window, IDisposable
             ImGui.CloseCurrentPopup();
 
         ImGui.EndPopup();
-    }
-
-    private string? FindExistingWarningKey(string abilityName)
-    {
-        foreach (var key in plugin.Configuration.AbilityWarnings.Keys)
-        {
-            if (string.Equals(key, abilityName, StringComparison.OrdinalIgnoreCase))
-                return key;
-        }
-
-        return null;
-    }
-
-    private string? FindExistingWarning(string abilityName)
-    {
-        var key = FindExistingWarningKey(abilityName);
-        return key != null ? plugin.Configuration.AbilityWarnings[key] : null;
     }
 }
