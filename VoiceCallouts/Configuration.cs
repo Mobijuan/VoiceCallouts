@@ -43,6 +43,14 @@ public class Configuration : IPluginConfiguration
     public bool AnnounceAbilityName { get; set; } = true;
 
     /// <summary>
+    /// Sub-option of <see cref="AnnounceAbilityName"/>, only meaningful while that's on. When
+    /// true, the ability name is skipped whenever a warning was actually found for that ability
+    /// (from any enabled source) - so you hear just "FRONTAL" instead of "Sidewise Spark,
+    /// FRONTAL", and the ability name only when there's nothing else to say.
+    /// </summary>
+    public bool OnlyAnnounceAbilityNameIfNoWarning { get; set; } = false;
+
+    /// <summary>
     /// Include mechanic text in the spoken announcement, from whichever source in
     /// <see cref="Services.AbilityWarningResolver"/> matched first. Has no effect when there's
     /// nothing to say for that ability.
@@ -58,13 +66,13 @@ public class Configuration : IPluginConfiguration
     /// <summary>Use the bundled, offline-extracted snapshot of cactbot's fight data (<see cref="Services.CactbotWarnings"/>).</summary>
     public bool UseCactbotWarnings { get; set; } = true;
 
-    /// <summary>Use the live guess from the game's own Action sheet data (<see cref="Services.AbilityShapeClassifier"/>). Thin coverage, checked last.</summary>
-    public bool UseLuminaShapeWarnings { get; set; } = true;
+    /// <summary>Use the live guess from the game's own Action sheet data (<see cref="Services.AbilityShapeClassifier"/>). Thin coverage, checked last, off by default.</summary>
+    public bool UseLuminaShapeWarnings { get; set; } = false;
 
     /// <summary>
     /// Your own mechanic notes. Fill these in for anything the automatic sources above miss or
     /// get wrong for the specific fight you're in - this always overrides them. Only spoken when
-    /// <see cref="AnnounceWarning"/> is on. Manage these from the Ability Warnings window (button
+    /// <see cref="AnnounceWarning"/> is on. Manage these from the Custom Warnings window (button
     /// in Settings), or by clicking a recent callout on the main window.
     /// </summary>
     public List<AbilityWarningEntry> AbilityWarnings { get; set; } = new();

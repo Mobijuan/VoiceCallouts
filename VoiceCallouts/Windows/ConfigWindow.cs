@@ -84,7 +84,7 @@ public class ConfigWindow : Window, IDisposable
         ImGui.Spacing();
         ImGui.TextUnformatted("Game volume");
         ImGui.Spacing();
-        ImGui.TextWrapped("This is the game's own Master Volume slider (also in the game's System > Sound settings) - surfaced here so you can balance it against the voice above without leaving this window.");
+        ImGui.TextWrapped("Game master volume slider. Adjust if the voice callouts are being drowned out");
 
         if (Plugin.GameConfig.TryGet(SystemConfigOption.SoundMaster, out uint masterVolume) &&
             Plugin.GameConfig.TryGet(SystemConfigOption.SoundMaster, out UIntConfigProperties? masterVolumeProps) &&
@@ -161,11 +161,70 @@ public class ConfigWindow : Window, IDisposable
             configuration.Save();
         }
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Mechanic text - see the Warnings section on the main window for sources, and your manual entries below. Only spoken when there's something to say.");
+            ImGui.SetTooltip("Mechanic text from the sources below, and your manual entries. Only spoken when there's something to say.");
+
+        ImGui.Indent();
+        ImGui.BeginDisabled(!announceAbilityName);
+        var onlyAbilityNameIfNoWarning = configuration.OnlyAnnounceAbilityNameIfNoWarning;
+        if (ImGui.Checkbox("Only say ability name if no warning was found", ref onlyAbilityNameIfNoWarning))
+        {
+            configuration.OnlyAnnounceAbilityNameIfNoWarning = onlyAbilityNameIfNoWarning;
+            configuration.Save();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("When on, the ability name is skipped whenever a warning was found for it (e.g. just \"FRONTAL\" instead of \"Sidewise Spark, FRONTAL\") - only enabled while Ability name above is on.");
+        ImGui.EndDisabled();
+        ImGui.Unindent();
+
+        ImGui.Spacing();
+        ImGui.TextUnformatted("Warning sources");
+        ImGui.Spacing();
+
+        var warningsEnabled = configuration.WarningsEnabled;
+        if (ImGui.Checkbox("Enabled##Warnings", ref warningsEnabled))
+        {
+            configuration.WarningsEnabled = warningsEnabled;
+            configuration.Save();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Master switch for the Warning announcement above.");
+
+        ImGui.BeginDisabled(!warningsEnabled);
+
+        var useManual = configuration.UseManualWarnings;
+        if (ImGui.Checkbox("Manual", ref useManual))
+        {
+            configuration.UseManualWarnings = useManual;
+            configuration.Save();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Your own entries from the Custom Warnings window. Always wins over the sources below.");
+
+        ImGui.SameLine();
+        var useCactbot = configuration.UseCactbotWarnings;
+        if (ImGui.Checkbox($"Cactbot ({plugin.CactbotWarnings.Count})", ref useCactbot))
+        {
+            configuration.UseCactbotWarnings = useCactbot;
+            configuration.Save();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("A bundled, offline-extracted snapshot of cactbot's community fight data. Covers a real chunk of raids/trials/dungeons, but only where the callout is a fixed string - directional/conditional mechanics are left out rather than guessed at.");
+
+        ImGui.SameLine();
+        var useLumina = configuration.UseLuminaShapeWarnings;
+        if (ImGui.Checkbox("Game data", ref useLumina))
+        {
+            configuration.UseLuminaShapeWarnings = useLumina;
+            configuration.Save();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Live best-effort guess (FRONTAL/CIRCLE/LINE/CROSS) from the game's own Action data. Thin coverage - most casts won't get a shape from this. Off by default since it's the least reliable source.");
+
+        ImGui.EndDisabled();
 
         ImGui.Spacing();
         ImGui.TextWrapped($"Manual ability warnings always override the Cactbot/Game data sources for the (creature, ability) pairs listed there - {configuration.AbilityWarnings.Count} entries currently.");
-        if (ImGui.Button("Manage Ability Warnings"))
+        if (ImGui.Button("Custom Warnings"))
             plugin.ToggleAbilityWarningsUi();
 
         ImGui.Spacing();

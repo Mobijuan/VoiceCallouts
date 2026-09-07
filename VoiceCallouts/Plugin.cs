@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Game.Command;
+using Dalamud.Game.Gui.ContextMenu;
 using Dalamud.IoC;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
@@ -25,6 +27,8 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
     [PluginService] internal static IGameConfig GameConfig { get; private set; } = null!;
+    [PluginService] internal static IContextMenu ContextMenu { get; private set; } = null!;
+    [PluginService] internal static IChatGui ChatGui { get; private set; } = null!;
 
     private const string CommandName = "/vcallouts";
     private const int MaxRecentCallouts = 50;
@@ -35,6 +39,7 @@ public sealed class Plugin : IDalamudPlugin
     private ConfigWindow ConfigWindow { get; init; }
     private MainWindow MainWindow { get; init; }
     private AbilityWarningsWindow AbilityWarningsWindow { get; init; }
+    private NewCustomWarningWindow NewCustomWarningWindow { get; init; }
 
     internal BossDetector BossDetector { get; }
     internal CastWatcher CastWatcher { get; }
@@ -60,14 +65,16 @@ public sealed class Plugin : IDalamudPlugin
         ConfigWindow = new ConfigWindow(this);
         MainWindow = new MainWindow(this);
         AbilityWarningsWindow = new AbilityWarningsWindow(this);
+        NewCustomWarningWindow = new NewCustomWarningWindow(this);
 
         WindowSystem.AddWindow(ConfigWindow);
         WindowSystem.AddWindow(MainWindow);
         WindowSystem.AddWindow(AbilityWarningsWindow);
+        WindowSystem.AddWindow(NewCustomWarningWindow);
 
         CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
-            HelpMessage = "Toggles the Voice Callouts status window."
+            HelpMessage = "Toggles the Voice Callouts status window. \n'/vcallouts newcustom' quickly adds a warning for the last heard ability."
         });
 
         // Tell the UI system that we want our windows to be drawn through the window system
@@ -81,6 +88,8 @@ public sealed class Plugin : IDalamudPlugin
         PluginInterface.UiBuilder.OpenMainUi += ToggleMainUi;
 
         Framework.Update += OnFrameworkUpdate;
+
+        ContextMenu.OnMenuOpened += OnContextMenuOpened;
 
         Log.Information("VoiceCallouts loaded.");
     }
@@ -110,6 +119,8 @@ public sealed class Plugin : IDalamudPlugin
     {
         Framework.Update -= OnFrameworkUpdate;
 
+        ContextMenu.OnMenuOpened -= OnContextMenuOpened;
+
         PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
         PluginInterface.UiBuilder.OpenConfigUi -= ToggleConfigUi;
         PluginInterface.UiBuilder.OpenMainUi -= ToggleMainUi;
@@ -119,6 +130,7 @@ public sealed class Plugin : IDalamudPlugin
         ConfigWindow.Dispose();
         MainWindow.Dispose();
         AbilityWarningsWindow.Dispose();
+        NewCustomWarningWindow.Dispose();
         TtsService.Dispose();
 
         CastWatcher.AbilityAnnounced -= OnAbilityAnnounced;
@@ -127,6 +139,24 @@ public sealed class Plugin : IDalamudPlugin
     }
 
     private void OnFrameworkUpdate(IFramework framework) => CastWatcher.Tick();
+
+    /// <summary>Adds "Add Voice Callouts Warning" to the right-click menu for hostile NPCs.</summary>
+    private void OnContextMenuOpened(IMenuOpenedArgs args)
+    {
+        if (args.MenuType != ContextMenuType.Default)
+            return;
+
+        if (args.Target is not MenuTargetDefault { TargetObject: IBattleNpc npc } ||
+            npc.SubKind != (byte)BattleNpcSubKind.Combatant)
+            return;
+
+        var creatureName = npc.Name.TextValue;
+        args.AddMenuItem(new MenuItem
+        {
+            Name = "Add Voice Callouts Warning",
+            OnClicked = _ => AbilityWarningsWindow.PrefillNewEntry(BossDetector.CurrentZoneName, creatureName),
+        });
+    }
 
     private void OnAbilityAnnounced(string abilityName, uint actionId, IBattleNpc npc)
     {
@@ -149,16 +179,27 @@ public sealed class Plugin : IDalamudPlugin
         if (configuration.AnnounceBossName)
             parts.Add(bossName);
 
-        if (configuration.AnnounceAbilityName)
+        var suppressAbilityName = configuration.OnlyAnnounceAbilityNameIfNoWarning && !string.IsNullOrEmpty(warning);
+        if (configuration.AnnounceAbilityName && !suppressAbilityName)
             parts.Add(abilityName);
 
         if (configuration.AnnounceWarning && !string.IsNullOrEmpty(warning))
             parts.Add(warning);
 
-        return string.Join(' ', parts);
+        return string.Join(", ", parts);
     }
 
-    private void OnCommand(string command, string args) => MainWindow.Toggle();
+    private void OnCommand(string command, string args)
+    {
+        if (string.Equals(args.Trim(), "newcustom", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!NewCustomWarningWindow.TryOpenForMostRecentCallout())
+                ChatGui.PrintError("[Voice Callouts] No ability has been heard yet to create a warning for.");
+            return;
+        }
+
+        MainWindow.Toggle();
+    }
 
     public void ToggleConfigUi() => ConfigWindow.Toggle();
     public void ToggleMainUi() => MainWindow.Toggle();
