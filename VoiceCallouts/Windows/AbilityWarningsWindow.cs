@@ -12,7 +12,6 @@ namespace VoiceCallouts.Windows;
 public class AbilityWarningsWindow : Window, IDisposable
 {
     private const string EditPopupId = "EditAbilityWarning";
-    private const string PickAbilityPopupId = "PickKnownAbility";
     private const string ImportConfirmPopupId = "ImportWarningsConfirm";
 
     private readonly Plugin plugin;
@@ -63,17 +62,29 @@ public class AbilityWarningsWindow : Window, IDisposable
 
     public void Dispose() { }
 
+    /// <summary>Refreshes the Zone dropdown to your current zone every time the window opens (not just once ever).</summary>
+    public override void OnOpen()
+    {
+        newZone = plugin.BossDetector.CurrentZoneName;
+    }
+
     public override void Draw()
     {
         var entries = plugin.Configuration.AbilityWarnings;
+        var visibleCount = entries.Count(MatchesFilters);
+        var isFiltered = visibleCount != entries.Count;
 
         DrawAddNewSection();
 
         ImGui.Spacing();
         ImGui.Separator();
 
-        if (ImGui.Button("Export to Clipboard"))
+        if (ImGui.Button(isFiltered ? $"Export to Clipboard ({visibleCount} of {entries.Count})" : "Export to Clipboard"))
             ExportToClipboard();
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(isFiltered
+                ? $"Only exports what matches the current filter below - {visibleCount} of {entries.Count} entries."
+                : "Exports all entries (no filter is currently active).");
 
         ImGui.SameLine();
         if (ImGui.Button("Import from Clipboard"))
@@ -108,8 +119,12 @@ public class AbilityWarningsWindow : Window, IDisposable
         ImGui.TableSetupColumn("Ability", ImGuiTableColumnFlags.WidthStretch, 0f, 0);
         ImGui.TableSetupColumn("Warning", ImGuiTableColumnFlags.WidthStretch, 0f, 0);
         ImGui.TableSetupColumn("##Actions", ImGuiTableColumnFlags.NoSort | ImGuiTableColumnFlags.WidthFixed, 130f, 0);
-        ImGui.TableHeadersRow();
 
+        // Keep the header and filter row pinned at the top while the data rows below them
+        // scroll - otherwise they'd scroll out of view along with the table content.
+        ImGui.TableSetupScrollFreeze(0, 2);
+
+        ImGui.TableHeadersRow();
         DrawFilterRow();
 
         ApplySort(entries);
@@ -169,50 +184,29 @@ public class AbilityWarningsWindow : Window, IDisposable
     private void DrawAddNewSection()
     {
         ImGui.TextUnformatted("Add new");
+        ImGui.TextDisabled("Each dropdown offers anything you've ever heard - Zone narrows Creature, Creature narrows Ability. Type to enter something new.");
 
         if (string.IsNullOrEmpty(newZone))
             newZone = plugin.BossDetector.CurrentZoneName;
 
         ImGui.SetNextItemWidth(130);
-        ImGui.InputTextWithHint("##NewZone", "Zone", ref newZone, 128);
+        DrawEditableCombo("##NewZone", ref newZone, GetKnownZones(), "Zone");
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("Defaults to your current zone - edit freely if you're adding this for somewhere else.");
 
         ImGui.SameLine();
         ImGui.SetNextItemWidth(150);
-        ImGui.InputTextWithHint("##NewCreature", "Creature", ref newCreature, 128);
+        DrawEditableCombo("##NewCreature", ref newCreature, GetKnownCreatures(newZone), "Creature");
 
         ImGui.SameLine();
         ImGui.SetNextItemWidth(150);
-        ImGui.InputTextWithHint("##NewAbility", "Ability", ref newAbility, 128);
-
-        ImGui.SameLine();
-        var knownAbilities = GetKnownAbilities(newCreature);
-        ImGui.BeginDisabled(knownAbilities.Count == 0);
-        if (ImGui.SmallButton("Pick..."))
-            ImGui.OpenPopup(PickAbilityPopupId);
-        ImGui.EndDisabled();
+        DrawEditableCombo("##NewAbility", ref newAbility, GetKnownAbilities(newCreature), "Ability",
+            ability => plugin.Configuration.FindAbilityWarning(newCreature, ability) != null);
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip(knownAbilities.Count == 0
-                ? "No abilities heard yet for this creature - type one in manually, or wait until you've heard it cast."
-                : "Pick from abilities you've already heard this creature cast.");
-
-        if (ImGui.BeginPopup(PickAbilityPopupId))
-        {
-            foreach (var ability in knownAbilities)
-            {
-                if (ImGui.Selectable(ability))
-                {
-                    newAbility = ability;
-                    ImGui.CloseCurrentPopup();
-                }
-            }
-
-            ImGui.EndPopup();
-        }
+            ImGui.SetTooltip("Abilities already covered by an existing warning are grayed out - edit them from the table below instead.");
 
         ImGui.SameLine();
-        ImGui.SetNextItemWidth(120);
+        ImGui.SetNextItemWidth(160);
         ImGui.InputTextWithHint("##NewWarning", "Warning", ref newWarning, 64);
 
         ImGui.SameLine();
@@ -222,11 +216,53 @@ public class AbilityWarningsWindow : Window, IDisposable
         {
             plugin.Configuration.AddOrUpdateAbilityWarning(newZone, newCreature.Trim(), newAbility.Trim(), newWarning.Trim());
             plugin.Configuration.Save();
-            newCreature = "";
+            // Zone/Creature deliberately kept, so adding several abilities for the same
+            // creature in a row doesn't require reselecting them each time.
             newAbility = "";
             newWarning = "";
         }
         ImGui.EndDisabled();
+    }
+
+    /// <summary>
+    /// A dropdown that also accepts free text: opening it shows a text box (pre-filled with the
+    /// current value) for typing something new, followed by a selectable list of
+    /// <paramref name="options"/> for picking something already known - narrowed live to
+    /// whatever's currently typed, for autocomplete-style filtering. Standard Dear ImGui combos
+    /// only support picking, not typing, so this combines a combo with an inline input. Options
+    /// for which <paramref name="isDisabled"/> returns true are shown grayed out and unselectable.
+    /// </summary>
+    private static void DrawEditableCombo(string id, ref string value, List<string> options, string hint, Func<string, bool>? isDisabled = null)
+    {
+        if (!ImGui.BeginCombo(id, string.IsNullOrEmpty(value) ? hint : value))
+            return;
+
+        ImGui.SetNextItemWidth(-1);
+        ImGui.InputTextWithHint($"{id}Input", hint, ref value, 128);
+
+        var typed = value;
+        var filtered = string.IsNullOrEmpty(typed)
+            ? options
+            : options.Where(o => o.Contains(typed, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        if (filtered.Count > 0)
+        {
+            ImGui.Separator();
+            foreach (var option in filtered)
+            {
+                var disabled = isDisabled?.Invoke(option) ?? false;
+                ImGui.BeginDisabled(disabled);
+                if (ImGui.Selectable(disabled ? $"{option} (has warning)" : option, string.Equals(option, value, StringComparison.OrdinalIgnoreCase)))
+                    value = option;
+                ImGui.EndDisabled();
+            }
+        }
+        else
+        {
+            ImGui.TextDisabled(options.Count == 0 ? "Nothing cached yet." : "No matches.");
+        }
+
+        ImGui.EndCombo();
     }
 
     private void DrawFilterRow()
@@ -306,13 +342,56 @@ public class AbilityWarningsWindow : Window, IDisposable
         ImGui.EndPopup();
     }
 
-    /// <summary>Distinct ability names seen for this creature, from recent callouts and existing warnings.</summary>
+    /// <summary>Distinct zones from the persistent known-abilities cache (see Configuration.RecordKnownAbility).</summary>
+    private List<string> GetKnownZones()
+    {
+        var zones = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var known in plugin.Configuration.KnownAbilities)
+        {
+            if (!string.IsNullOrWhiteSpace(known.Zone))
+                zones.Add(known.Zone);
+        }
+
+        var list = zones.ToList();
+        list.Sort(StringComparer.OrdinalIgnoreCase);
+        return list;
+    }
+
+    /// <summary>Distinct creature names from the cache, narrowed to the given zone if one's set.</summary>
+    private List<string> GetKnownCreatures(string zone)
+    {
+        var creatures = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var known in plugin.Configuration.KnownAbilities)
+        {
+            if (string.IsNullOrWhiteSpace(known.CreatureName))
+                continue;
+
+            if (!string.IsNullOrWhiteSpace(zone) && !string.Equals(known.Zone, zone, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            creatures.Add(known.CreatureName);
+        }
+
+        var list = creatures.ToList();
+        list.Sort(StringComparer.OrdinalIgnoreCase);
+        return list;
+    }
+
+    /// <summary>Distinct ability names seen for this creature, from the persistent cache, recent callouts, and existing warnings.</summary>
     private List<string> GetKnownAbilities(string creatureName)
     {
         if (string.IsNullOrWhiteSpace(creatureName))
             return [];
 
         var abilities = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var known in plugin.Configuration.KnownAbilities)
+        {
+            if (string.Equals(known.CreatureName, creatureName, StringComparison.OrdinalIgnoreCase))
+                abilities.Add(known.AbilityName);
+        }
 
         foreach (var record in plugin.RecentCallouts)
         {

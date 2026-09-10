@@ -3,8 +3,8 @@
     "Author": "Mobijuan",
     "Name": "Voice Callouts",
     "InternalName": "VoiceCallouts",
-    "AssemblyVersion": "0.8.0.0",
-    "Description": "Listens for dangerous enemy abiltiies and announces it via Text to Speech (TTS). Allows creation of custom warnings on a per ability basis",
+    "AssemblyVersion": "0.9.0.0",
+    "Description": "Listens for dangerous enemy abiltiies and announces it via Text to Speech (TTS). Allows creation of custom warnings on a per ability basis\n\nCommands:\n/vcallouts - Toggles the main status window.\n/vcallouts custom - Opens the Custom Warnings window to browse, filter, and edit your warnings.\n/vcallouts newcustom - Quickly adds a warning for the most recently heard ability.",
     "ApplicableVersion": "any",
     "RepoUrl": "https://github.com/Mobijuan/VoiceCallouts",
     "Tags": [
@@ -20,6 +20,6 @@
     "DownloadLinkInstall": "https://github.com/Mobijuan/VoiceCallouts/releases/download/latest/latest.zip",
     "DownloadLinkUpdate": "https://github.com/Mobijuan/VoiceCallouts/releases/download/latest/latest.zip",
     "DownloadLinkTesting": "https://github.com/Mobijuan/VoiceCallouts/releases/download/latest/latest.zip",
-    "LastUpdate": "1788797253"
+    "LastUpdate": "1789056973"
   }
 ]

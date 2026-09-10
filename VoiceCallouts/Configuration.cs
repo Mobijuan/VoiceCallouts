@@ -111,6 +111,33 @@ public class Configuration : IPluginConfiguration
         return entry;
     }
 
+    /// <summary>
+    /// Every distinct (zone, creature, ability) combination heard so far, accumulated across
+    /// sessions - lets the Custom Warnings window's Zone/Creature/Ability pickers offer anything
+    /// you've ever fought, not just the current session, so you can build up warnings for fights
+    /// you're not currently in.
+    /// </summary>
+    public List<KnownAbilityEntry> KnownAbilities { get; set; } = new();
+
+    /// <summary>
+    /// Records a (zone, creature, ability) combination if it hasn't been seen before. Returns
+    /// true if a new entry was added (so the caller knows whether it's worth calling
+    /// <see cref="Save"/>) - does not save by itself.
+    /// </summary>
+    public bool RecordKnownAbility(string zone, string creatureName, string abilityName)
+    {
+        var exists = KnownAbilities.Any(k =>
+            string.Equals(k.Zone, zone, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(k.CreatureName, creatureName, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(k.AbilityName, abilityName, StringComparison.OrdinalIgnoreCase));
+
+        if (exists)
+            return false;
+
+        KnownAbilities.Add(new KnownAbilityEntry { Zone = zone, CreatureName = creatureName, AbilityName = abilityName });
+        return true;
+    }
+
     // --- Text-to-speech ---
 
     /// <summary>Installed SAPI voice name to use, or null for the system default voice.</summary>

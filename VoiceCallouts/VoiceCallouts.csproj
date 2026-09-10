@@ -1,12 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
-    <Version>0.8.0.0</Version>
+    <Version>0.9.0.0</Version>
     <!-- Manifest fields (see https://github.com/goatcorp/DalamudPackager/blob/827d88dc/DalamudPackager/DalamudPackager.cs#L420) -->
     <Author>Mobijuan</Author>
     <Name>Voice Callouts</Name>
     <Punchline>Text-to-speech callouts for boss abilities in duties and open-world encounters.</Punchline>
-    <Description>Listens for dangerous enemy abiltiies and announces it via Text to Speech (TTS). Allows creation of custom warnings on a per ability basis</Description>
+    <Description>Listens for dangerous enemy abiltiies and announces it via Text to Speech (TTS). Allows creation of custom warnings on a per ability basis
+
+Commands:
+/vcallouts - Toggles the main status window.
+/vcallouts custom - Opens the Custom Warnings window to browse, filter, and edit your warnings.
+/vcallouts newcustom - Quickly adds a warning for the most recently heard ability.</Description>
     <RepoUrl>https://github.com/Mobijuan/VoiceCallouts</RepoUrl>
     <Tags>voice;tts;boss;callouts;combat;accessibility</Tags>
   </PropertyGroup>

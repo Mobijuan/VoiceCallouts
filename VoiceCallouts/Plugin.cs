@@ -74,7 +74,9 @@ public sealed class Plugin : IDalamudPlugin
 
         CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
-            HelpMessage = "Toggles the Voice Callouts status window. \n'/vcallouts newcustom' quickly adds a warning for the last heard ability."
+            HelpMessage = "Toggles the Voice Callouts status window.\n" +
+                           "'/vcallouts custom' opens the Custom Warnings window.\n" +
+                           "'/vcallouts newcustom' quickly adds a warning for the last heard ability."
         });
 
         // Tell the UI system that we want our windows to be drawn through the window system
@@ -170,6 +172,9 @@ public sealed class Plugin : IDalamudPlugin
         RecentCallouts.Insert(0, new CalloutRecord(DateTime.Now, bossName, abilityName, warning, zone));
         if (RecentCallouts.Count > MaxRecentCallouts)
             RecentCallouts.RemoveRange(MaxRecentCallouts, RecentCallouts.Count - MaxRecentCallouts);
+
+        if (Configuration.RecordKnownAbility(zone, bossName, abilityName))
+            Configuration.Save();
     }
 
     private static string FormatAnnouncement(Configuration configuration, string abilityName, string bossName, string warning)
@@ -191,14 +196,23 @@ public sealed class Plugin : IDalamudPlugin
 
     private void OnCommand(string command, string args)
     {
-        if (string.Equals(args.Trim(), "newcustom", StringComparison.OrdinalIgnoreCase))
+        switch (args.Trim().ToLowerInvariant())
         {
-            if (!NewCustomWarningWindow.TryOpenForMostRecentCallout())
-                ChatGui.PrintError("[Voice Callouts] No ability has been heard yet to create a warning for.");
-            return;
-        }
+            case "newcustom":
+                if (!NewCustomWarningWindow.TryOpenForMostRecentCallout())
+                    ChatGui.PrintError("[Voice Callouts] No ability has been heard yet to create a warning for.");
+                return;
 
-        MainWindow.Toggle();
+            case "custom":
+                AbilityWarningsWindow.IsOpen = true;
+                AbilityWarningsWindow.RequestFocus = true;
+                AbilityWarningsWindow.BringToFront();
+                return;
+
+            default:
+                MainWindow.Toggle();
+                return;
+        }
     }
 
     public void ToggleConfigUi() => ConfigWindow.Toggle();
