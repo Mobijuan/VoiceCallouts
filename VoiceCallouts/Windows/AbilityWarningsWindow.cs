@@ -24,6 +24,17 @@ public class AbilityWarningsWindow : Window, IDisposable
     private string newAbility = "";
     private string newWarning = "";
 
+    // Per-dropdown open-tracking state for DrawEditableCombo: whether it was open last frame,
+    // and what its value was at the moment it was opened. Together these mean "show the full
+    // list until the user actually edits the value" instead of pre-filtering by whatever default
+    // text is already sitting in the field (e.g. Zone defaulting to your current zone).
+    private bool zoneComboWasOpen;
+    private string zoneComboOpenedWith = "";
+    private bool creatureComboWasOpen;
+    private string creatureComboOpenedWith = "";
+    private bool abilityComboWasOpen;
+    private string abilityComboOpenedWith = "";
+
     private string filterId = "";
     private string filterZone = "";
     private string filterCreature = "";
@@ -190,17 +201,17 @@ public class AbilityWarningsWindow : Window, IDisposable
             newZone = plugin.BossDetector.CurrentZoneName;
 
         ImGui.SetNextItemWidth(130);
-        DrawEditableCombo("##NewZone", ref newZone, GetKnownZones(), "Zone");
+        DrawEditableCombo("##NewZone", ref newZone, GetKnownZones(), "Zone", ref zoneComboWasOpen, ref zoneComboOpenedWith);
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("Defaults to your current zone - edit freely if you're adding this for somewhere else.");
 
         ImGui.SameLine();
         ImGui.SetNextItemWidth(150);
-        DrawEditableCombo("##NewCreature", ref newCreature, GetKnownCreatures(newZone), "Creature");
+        DrawEditableCombo("##NewCreature", ref newCreature, GetKnownCreatures(newZone), "Creature", ref creatureComboWasOpen, ref creatureComboOpenedWith);
 
         ImGui.SameLine();
         ImGui.SetNextItemWidth(150);
-        DrawEditableCombo("##NewAbility", ref newAbility, GetKnownAbilities(newCreature), "Ability",
+        DrawEditableCombo("##NewAbility", ref newAbility, GetKnownAbilities(newCreature), "Ability", ref abilityComboWasOpen, ref abilityComboOpenedWith,
             ability => plugin.Configuration.FindAbilityWarning(newCreature, ability) != null);
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("Abilities already covered by an existing warning are grayed out - edit them from the table below instead.");
@@ -232,16 +243,30 @@ public class AbilityWarningsWindow : Window, IDisposable
     /// only support picking, not typing, so this combines a combo with an inline input. Options
     /// for which <paramref name="isDisabled"/> returns true are shown grayed out and unselectable.
     /// </summary>
-    private static void DrawEditableCombo(string id, ref string value, List<string> options, string hint, Func<string, bool>? isDisabled = null)
+    private static void DrawEditableCombo(string id, ref string value, List<string> options, string hint, ref bool wasOpen, ref string openedWithValue, Func<string, bool>? isDisabled = null)
     {
-        if (!ImGui.BeginCombo(id, string.IsNullOrEmpty(value) ? hint : value))
+        var isOpenNow = ImGui.BeginCombo(id, string.IsNullOrEmpty(value) ? hint : value);
+        var justOpened = isOpenNow && !wasOpen;
+        wasOpen = isOpenNow;
+
+        if (!isOpenNow)
             return;
+
+        // The field can already hold a pre-filled/default value (e.g. Zone defaults to your
+        // current zone) when the dropdown is opened - filtering by that would hide everything
+        // unless it happened to match. So show the full list for as long as the value is still
+        // whatever it was *when this dropdown was opened*, and only start filtering once the
+        // user actually edits it - not just on the single opening frame, since the value hasn't
+        // changed yet on the frame right after either.
+        if (justOpened)
+            openedWithValue = value;
 
         ImGui.SetNextItemWidth(-1);
         ImGui.InputTextWithHint($"{id}Input", hint, ref value, 128);
 
         var typed = value;
-        var filtered = string.IsNullOrEmpty(typed)
+        var hasBeenEdited = !string.Equals(typed, openedWithValue, StringComparison.Ordinal);
+        var filtered = !hasBeenEdited || string.IsNullOrEmpty(typed)
             ? options
             : options.Where(o => o.Contains(typed, StringComparison.OrdinalIgnoreCase)).ToList();
 
