@@ -76,7 +76,8 @@ public sealed class Plugin : IDalamudPlugin
         {
             HelpMessage = "Toggles the Voice Callouts status window.\n" +
                            "'/vcallouts custom' opens the Custom Warnings window.\n" +
-                           "'/vcallouts newcustom' quickly adds a warning for the last heard ability."
+                           "'/vcallouts newcustom' quickly adds a warning for the last heard ability.\n" +
+                           "'/vcallouts blacklistlast' silences the last heard ability for good."
         });
 
         // Tell the UI system that we want our windows to be drawn through the window system
@@ -164,10 +165,14 @@ public sealed class Plugin : IDalamudPlugin
     {
         var bossName = npc.Name.TextValue;
         var zone = BossDetector.CurrentZoneName;
-        var warning = WarningResolver.Resolve(abilityName, bossName, actionId);
-        var text = FormatAnnouncement(Configuration, abilityName, bossName, warning);
+        var blacklisted = Configuration.IsBlacklisted(bossName, abilityName);
+        var warning = blacklisted ? Configuration.BlacklistMarker : WarningResolver.Resolve(abilityName, bossName, actionId);
 
-        TtsService.Speak(text);
+        if (!blacklisted)
+        {
+            var text = FormatAnnouncement(Configuration, abilityName, bossName, warning);
+            TtsService.Speak(text);
+        }
 
         RecentCallouts.Insert(0, new CalloutRecord(DateTime.Now, bossName, abilityName, warning, zone));
         if (RecentCallouts.Count > MaxRecentCallouts)
@@ -209,10 +214,28 @@ public sealed class Plugin : IDalamudPlugin
                 AbilityWarningsWindow.BringToFront();
                 return;
 
+            case "blacklistlast":
+                BlacklistMostRecentCallout();
+                return;
+
             default:
                 MainWindow.Toggle();
                 return;
         }
+    }
+
+    private void BlacklistMostRecentCallout()
+    {
+        if (RecentCallouts.Count == 0)
+        {
+            ChatGui.PrintError("[Voice Callouts] No ability has been heard yet to blacklist.");
+            return;
+        }
+
+        var record = RecentCallouts[0];
+        Configuration.AddOrUpdateAbilityWarning(record.Zone, record.BossName, record.Ability, Configuration.BlacklistMarker);
+        Configuration.Save();
+        ChatGui.Print($"[Voice Callouts] Blacklisted \"{record.Ability}\" for {record.BossName} - it won't be announced again.");
     }
 
     public void ToggleConfigUi() => ConfigWindow.Toggle();

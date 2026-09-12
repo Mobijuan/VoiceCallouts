@@ -111,11 +111,11 @@ public class MainWindow : Window, IDisposable
         ImGui.TextUnformatted($"Warning for: {editingCreature}: {editingAbility} ({editingZone})");
         ImGui.Spacing();
         ImGui.SetNextItemWidth(200);
-        ImGui.InputText("##EditWarningText", ref editingWarningText, 64);
+        var submitted = ImGui.InputText("##EditWarningText", ref editingWarningText, 64, ImGuiInputTextFlags.EnterReturnsTrue);
 
         var existing = plugin.Configuration.FindAbilityWarning(editingCreature, editingAbility);
 
-        if (ImGui.Button("Save"))
+        if (ImGui.Button("Save") || submitted)
         {
             if (!string.IsNullOrWhiteSpace(editingWarningText))
             {
@@ -139,6 +139,16 @@ public class MainWindow : Window, IDisposable
         ImGui.SameLine();
         if (ImGui.Button("Cancel"))
             ImGui.CloseCurrentPopup();
+
+        ImGui.Spacing();
+        if (ImGui.Button("Blacklist Ability"))
+        {
+            plugin.Configuration.AddOrUpdateAbilityWarning(editingZone, editingCreature, editingAbility, Configuration.BlacklistMarker);
+            plugin.Configuration.Save();
+            ImGui.CloseCurrentPopup();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Stops this ability from ever being announced again for this creature - useful for spammy casts that don't offer any useful information.");
 
         ImGui.EndPopup();
     }

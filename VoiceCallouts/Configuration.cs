@@ -87,6 +87,18 @@ public class Configuration : IPluginConfiguration
             string.Equals(e.AbilityName, abilityName, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
+    /// A manual warning of exactly this text silences the ability entirely (no TTS at all) rather
+    /// than being spoken as mechanic text - for casts that are just spammy/noisy and never useful
+    /// to hear. Checked independently of <see cref="WarningsEnabled"/>/<see cref="UseManualWarnings"/>,
+    /// since blacklisting is a distinct "stop announcing this" concern, not a mechanic-info one.
+    /// </summary>
+    public const string BlacklistMarker = "[BLACKLISTED]";
+
+    /// <summary>True if this (creature, ability) pair has a manual warning set to <see cref="BlacklistMarker"/>.</summary>
+    public bool IsBlacklisted(string creatureName, string abilityName) =>
+        string.Equals(FindAbilityWarning(creatureName, abilityName)?.Warning, BlacklistMarker, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Updates the warning text of the matching (creature, ability) entry if one exists, or adds
     /// a new one with the next auto-incremented id. Does not save - call <see cref="Save"/>.
     /// </summary>

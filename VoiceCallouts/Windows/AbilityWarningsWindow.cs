@@ -16,7 +16,6 @@ public class AbilityWarningsWindow : Window, IDisposable
 
     private readonly Plugin plugin;
 
-    private int editingId = -1;
     private string editingWarningText = "";
 
     private string newZone = "";
@@ -121,7 +120,7 @@ public class AbilityWarningsWindow : Window, IDisposable
                                        ImGuiTableFlags.Borders | ImGuiTableFlags.Resizable |
                                        ImGuiTableFlags.ScrollY;
 
-        if (!ImGui.BeginTable("AbilityWarningsTable", 6, flags, new Vector2(0, 0), 0f))
+        if (!ImGui.BeginTable("AbilityWarningsTable", 5, flags, new Vector2(0, 0), 0f))
             return;
 
         ImGui.TableSetupColumn("ID", ImGuiTableColumnFlags.WidthFixed, 40f, 0);
@@ -129,7 +128,6 @@ public class AbilityWarningsWindow : Window, IDisposable
         ImGui.TableSetupColumn("Creature", ImGuiTableColumnFlags.WidthStretch, 0f, 0);
         ImGui.TableSetupColumn("Ability", ImGuiTableColumnFlags.WidthStretch, 0f, 0);
         ImGui.TableSetupColumn("Warning", ImGuiTableColumnFlags.WidthStretch, 0f, 0);
-        ImGui.TableSetupColumn("##Actions", ImGuiTableColumnFlags.NoSort | ImGuiTableColumnFlags.WidthFixed, 130f, 0);
 
         // Keep the header and filter row pinned at the top while the data rows below them
         // scroll - otherwise they'd scroll out of view along with the table content.
@@ -148,8 +146,33 @@ public class AbilityWarningsWindow : Window, IDisposable
             ImGui.PushID(entry.Id);
             ImGui.TableNextRow();
 
+            // A row-spanning Selectable makes the whole row (not just column 0) respond to
+            // right-click, and its own PushID(entry.Id) scope means the context/edit popups
+            // below are opened and drawn in the exact same ID scope - unlike the old two-button
+            // layout, where OpenPopup was called inside this PushID block but BeginPopup was
+            // called after the loop had already PopID'd, so their computed ids never matched and
+            // the Edit button silently did nothing.
             ImGui.TableSetColumnIndex(0);
-            ImGui.TextUnformatted(entry.Id.ToString());
+            ImGui.Selectable(entry.Id.ToString(), false, ImGuiSelectableFlags.SpanAllColumns, Vector2.Zero);
+
+            if (ImGui.BeginPopupContextItem("RowContext"))
+            {
+                ImGui.TextDisabled($"{entry.CreatureName}: {entry.AbilityName}");
+                ImGui.Separator();
+
+                if (ImGui.MenuItem("Edit", "", false, true))
+                {
+                    editingWarningText = entry.Warning;
+                    ImGui.OpenPopup(EditPopupId);
+                }
+
+                if (ImGui.MenuItem("Remove", "", false, true))
+                    toRemove = entry;
+
+                ImGui.EndPopup();
+            }
+
+            DrawEditPopup(entry);
 
             ImGui.TableSetColumnIndex(1);
             ImGui.TextUnformatted(entry.Zone);
@@ -163,18 +186,6 @@ public class AbilityWarningsWindow : Window, IDisposable
             ImGui.TableSetColumnIndex(4);
             ImGui.TextUnformatted(entry.Warning);
 
-            ImGui.TableSetColumnIndex(5);
-            if (ImGui.SmallButton("Edit"))
-            {
-                editingId = entry.Id;
-                editingWarningText = entry.Warning;
-                ImGui.OpenPopup(EditPopupId);
-            }
-
-            ImGui.SameLine();
-            if (ImGui.SmallButton("Remove"))
-                toRemove = entry;
-
             ImGui.PopID();
         }
 
@@ -183,8 +194,6 @@ public class AbilityWarningsWindow : Window, IDisposable
             entries.Remove(toRemove);
             plugin.Configuration.Save();
         }
-
-        DrawEditPopup(entries);
 
         ImGui.EndTable();
 
@@ -311,10 +320,9 @@ public class AbilityWarningsWindow : Window, IDisposable
         ImGui.InputTextWithHint("##FilterAbility", "ability", ref filterAbility, 128);
 
         ImGui.TableSetColumnIndex(4);
-        ImGui.SetNextItemWidth(-1);
+        ImGui.SetNextItemWidth(-100);
         ImGui.InputTextWithHint("##FilterWarning", "warning", ref filterWarning, 64);
-
-        ImGui.TableSetColumnIndex(5);
+        ImGui.SameLine();
         if (ImGui.SmallButton("Clear filter"))
         {
             filterId = "";
@@ -335,18 +343,10 @@ public class AbilityWarningsWindow : Window, IDisposable
     private static bool Matches(string value, string filter) =>
         string.IsNullOrEmpty(filter) || value.Contains(filter, StringComparison.OrdinalIgnoreCase);
 
-    private void DrawEditPopup(List<AbilityWarningEntry> entries)
+    private void DrawEditPopup(AbilityWarningEntry entry)
     {
         if (!ImGui.BeginPopup(EditPopupId))
             return;
-
-        var entry = entries.Find(e => e.Id == editingId);
-        if (entry == null)
-        {
-            ImGui.CloseCurrentPopup();
-            ImGui.EndPopup();
-            return;
-        }
 
         ImGui.TextUnformatted($"{entry.CreatureName}: {entry.AbilityName}");
         ImGui.Spacing();
